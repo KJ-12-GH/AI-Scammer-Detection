@@ -1,1 +1,1 @@
-# AI-Scam-er-Detection
+# AI-Scammer-Detection
