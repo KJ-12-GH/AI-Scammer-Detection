@@ -8,3 +8,21 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment variables (Secrets should not be committed)
+.env
+
+# Raw data and intermediate models
+data/
+model/LSTM/
+model/phayathaibert_fold_1/
+model/train/
+model/validation/
+
+# Images and Analysis Results
+*.png
+*.csv
+dataset_dict.json

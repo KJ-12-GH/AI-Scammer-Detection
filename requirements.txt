@@ -1,0 +1,11 @@
+gradio
+transformers
+torch
+langchain
+langchain-huggingface
+langchain-community
+langchain-chroma
+chromadb
+sentence-transformers
+openrouter
+python-dotenv
