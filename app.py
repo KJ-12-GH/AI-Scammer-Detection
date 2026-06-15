@@ -5,7 +5,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from openrouter import OpenRouter
 
-
 # NLP
 NLP_MODEL_PATH = "model/best_phayathaibert_model"
 try:
@@ -87,7 +86,7 @@ def analyze_scam_sms(sms_message: str):
         return nlp_result, "ข้อความปกติ"
             
     # ส่วนที่ 2: RAG + LLM Prediction (ทำงานเมื่อ NLP ตรวจพบว่าเป็น Scam)
-    
+
     llm_result = "ไม่สามารถใช้งานโมเดล LLM + RAG ได้"
     if retriever:
         try:
