@@ -1,28 +1,36 @@
 import os
 import gradio as gr
 from transformers import pipeline
+import os
+import gradio as gr
+from transformers import pipeline
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from openrouter import OpenRouter
+from huggingface_hub import snapshot_download
 
 # NLP
-NLP_MODEL_PATH = "model/best_phayathaibert_model"
+NLP_MODEL_REPO_ID = "Nathanon-12/Thai-SMS-model" 
+
 try:
-    nlp_pipeline = pipeline("text-classification", model=NLP_MODEL_PATH, tokenizer=NLP_MODEL_PATH)
+    nlp_model_path = snapshot_download(repo_id=NLP_MODEL_REPO_ID)
+    nlp_pipeline = pipeline("text-classification", model=nlp_model_path, tokenizer=nlp_model_path)
 except Exception as e:
     nlp_pipeline = None
-    print(f"Warning: ไม่สามารถโหลดโมเดล NLP ได้: {e}")
+    print(f" Warning: ไม่สามารถโหลดโมเดล NLP ได้: {e}")
+
 
 #  โหลด RAG (Chroma DB & Embeddings)
-
+CHROMA_DB_REPO_ID = "Nathanon-12/Thai-SMS-model-LLM-RAG"
 try:
+    chroma_db_path = snapshot_download(repo_id=CHROMA_DB_REPO_ID)
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )
     vectorstore = Chroma(
-        persist_directory="model/chroma_db",
+        persist_directory="chroma_db_path",
         embedding_function=embedding_model
     )
     retriever = vectorstore.as_retriever(
@@ -34,25 +42,31 @@ except Exception as e:
     print(f"Warning: ไม่สามารถโหลด RAG ได้: {e}")
 
 SYSTEM_PROMPT = """Role:
-    คุณเป็นผู้เชี่ยวชาญด้านความมั่นคงปลอดภัยไซเบอร์ และการตรวจสอบข้อเท็จจริงของข้อความ SMS ในประเทศไทย ที่มีประสบการณ์สูงมานานกว่า 50 ปี
+    คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์ SMS หลอกลวง ในประเทศไทย และเป็นหน่วยรักษาความปลอดภัยทางไซเบอร์มานานกว่า 50 ปี
 
-Task:
-    หน้าที่ของคุณคือวิเคราะห์ข้อความ SMS ที่ได้รับ เพื่อตัดสินอย่างตรงไปตรงมาและเป็นกลางว่าข้อความนี้เป็น "SMS หลอกลวง (Scam)" หรือ "SMS ปกติ (Normal)" 
-    คุณต้องไม่อคติว่าข้อความที่ได้รับมาจะเป็น Scam เสมอไป แต่ให้ประเมินจากหลักฐานและบริบทที่มีอยู่จริง
+    Task:
+    โมเดล NLP ตรวจพบว่าข้อความนี้มีแนวโน้มเป็นข้อความหลอกลวง
+    หน้าที่ของคุณคือวิเคราะห์และอธิบายเหตุผลว่าทำไมข้อความนี้จึงเป็น SMS scam
+   
 
-Analysis method:
-    1. วิเคราะห์ลักษณะของข้อความ: มองหาจุดที่น่าสงสัย (เช่น ลิงก์แปลกปลอม, การเร่งรัด, ข้อเสนอดีเกินจริง)
-    2. ตรวจสอบความถูกต้องของลิงก์หรือโดเมน: เปรียบเทียบลิงก์ในข้อความกับโดเมนอย่างเป็นทางการขององค์กรนั้นๆ
-    3. พิจารณาเจตนาของข้อความ: ข้อความมีเจตนาเพื่อหลอกให้คลิก/โอนเงิน หรือเพียงแค่ให้ข้อมูล/ทำการตลาดตามปกติ
-    4. ใช้ข้อมูลจาก Context ที่เกี่ยวข้องเพื่อสนับสนุนการวิเคราะห์ของคุณ
+    Analysis method:
+  
+    1. เคราะห์ลักษณะของข้อความ: มองหาจุดที่น่าสงสัย (เช่น ลิงก์แปลกปลอม, การเร่งรัด, ข้อเสนอดีเกินจริง)
+    2. อ้างอิงนโยบายจริงขององค์กรหรือธนาคารที่เกี่ยวข้องจาก Context ที่ให้มา
+    3. แสดงให้เห็นถึงความขัดแย้งระหว่างข้อความกับนโยบายจริง
+    4. ตรวจสอบความถูกต้องของลิงก์หรือโดเมน: เปรียบเทียบลิงก์ในข้อความกับโดเมนอย่างเป็นทางการขององค์กรนั้นๆ
+    5. พิจารณาเจตนาของข้อความ: ข้อความมีเจตนาเพื่อหลอกให้คลิก/โอนเงิน หรือไม่
+    6. ใช้ข้อมูลจาก Context ที่เกี่ยวข้องเพื่อสนับสนุนการวิเคราะห์ของคุณ
 
-Response format:
-   ให้วิเคราะห์ออกมาแล้วตอบสั้นๆเป็นคำว่า "ปกติ" หรือ "แสกมเมอร์"เท่านั้น ห้ามตอบอย่างอื่นนอกจากคำว่า "ปกติ" หรือ "แสกมเมอร์"
+    Response format:
+    ตอบเป็นภาษาไทยเท่านั้นห้ามตอบเป็นภาษาอื่นเด็ดขาด กระชับ เข้าใจง่าย และใช้โครงสร้างตามดังนี้:
+    - จุดที่น่าสงสัย (ระบุจุดน่าสงสัยที่พบ)
+    - นโยบายที่เกี่ยวข้อง (อ้างอิงจาก Context)
+    - สรุป (อธิบายสั้นๆ ว่าทำไมถึงเป็น SMS Scam)
 
-Important:
-    - ห้ามตีความเข้าข้างว่าเป็น Scam หากข้อความนั้นเป็นข้อความแจ้งเตือนทั่วไป (เช่น OTP, โปรโมชัน AIS/TRUE, แจ้งส่งพัสดุ) ที่ไม่มีลิงก์อันตรายหรือการแอบอ้าง
-    - ให้ใช้เฉพาะข้อมูลจาก Context ที่ให้มาเท่านั้นในการอ้างอิงนโยบายที่ถูกต้อง ห้ามแต่งนโยบายหรือชื่อโดเมนขึ้นมาเองเด็ดขาด
-    - หาก Context ไม่เพียงพอและข้อความไม่มีลักษณะอันตรายชัดเจน ให้วิเคราะห์จากจากลักษณะของข้อความแทน"""
+    Important:
+    - ให้ใช้เฉพาะข้อมูลจาก Context ที่ให้มาเท่านั้น ห้ามแต่งนโยบายขึ้นมาเอง
+    - ถ้าไม่มีนโยบายที่เกี่ยวข้องใน Context ให้วิเคราะห์จากลักษณะของข้อความแทน"""
 
 USER_PROMPT_TEMPLATE = """ข้อความ SMS: {sms_message}
 นโยบายอ้างอิง:
@@ -69,8 +83,7 @@ def analyze_scam_sms(sms_message: str):
         try:
             preds = nlp_pipeline(sms_message)
             label = preds[0]['label']
-            score = preds[0]['score']
-            nlp_result = f"Label: {label} (ความมั่นใจ: {score:.4f})"
+            nlp_result = f"Label: {label} )"
             
             # ตรวจสอบ Label ว่าเป็น Scam หรือ ปกติ
             if "0" in label or "normal" in label.lower() or "ปกติ" in label:
@@ -105,7 +118,7 @@ def analyze_scam_sms(sms_message: str):
             # ดึง API Key จาก Secrets ของ HuggingFace Space 
             api_key = os.environ.get("OPENROUTER_API_KEY")
             if not api_key:
-                llm_result = "กรุณาตั้งค่า OPENROUTER_API_KEY ใน Variables/Secrets ของ Hugging Face Space"
+                llm_result = "ไม่พบ API key"
             else:
                 with OpenRouter(api_key=api_key) as client:
                     response = client.chat.send(
