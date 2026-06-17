@@ -1,9 +1,10 @@
 import os
+import re  
 import gradio as gr
 from transformers import pipeline
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from openrouter import OpenRouter
+from langchain_chroma import Chroma
+from openai import OpenAI
 from huggingface_hub import snapshot_download
 
 # NLP
@@ -27,7 +28,7 @@ try:
         encode_kwargs={"normalize_embeddings": True}
     )
     vectorstore = Chroma(
-        persist_directory="chroma_db_path",
+        persist_directory=chroma_db_path, 
         embedding_function=embedding_model
     )
     retriever = vectorstore.as_retriever(
@@ -69,21 +70,35 @@ USER_PROMPT_TEMPLATE = """ข้อความ SMS: {sms_message}
 นโยบายอ้างอิง:
 {retrieved_context}"""
 
+def clean_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    
+    text = text.strip()
+    text = re.sub(r'http[s]?://\S+', ' ลิงก์ ', text)
+    text = re.sub(r'\d+', '0', text)
+    return text
+
 
 # ฟังก์ชันสำหรับการวิเคราะห์
 def analyze_scam_sms(sms_message: str):
-   
+    if not sms_message or not sms_message.strip():
+        return "Label: ไม่ได้ระบุข้อความ", "กรุณาระบุข้อความ SMS ที่ต้องการตรวจสอบ"
+    
+    cleaned_sms = clean_text(sms_message)
     nlp_result = "ไม่สามารถใช้งานโมเดล NLP ได้"
     is_scam = True  
     
     if nlp_pipeline:
         try:
-            preds = nlp_pipeline(sms_message)
+            preds = nlp_pipeline(cleaned_sms)
             label = preds[0]['label']
-            nlp_result = f"Label: {label} )"
+            nlp_result = f"Label: {label} "
             
             # ตรวจสอบ Label ว่าเป็น Scam หรือ ปกติ
             if "0" in label or "normal" in label.lower() or "ปกติ" in label:
+                is_scam = False
+            elif " " in label or "scam" in label.lower() or "หลอกลวง" in label:
                 is_scam = False
             else:
                 is_scam = True
@@ -100,7 +115,6 @@ def analyze_scam_sms(sms_message: str):
     llm_result = "ไม่สามารถใช้งานโมเดล LLM + RAG ได้"
     if retriever:
         try:
-            # Retrieve Context
             retrieved_docs = retriever.invoke(sms_message)
             context = "\n\n---\n\n".join([
                 f"[ที่มา: {doc.metadata.get('source', 'ระบุแหล่งที่มา')}]\n{doc.page_content}"
@@ -117,14 +131,19 @@ def analyze_scam_sms(sms_message: str):
             if not api_key:
                 llm_result = "ไม่พบ API key"
             else:
-                with OpenRouter(api_key=api_key) as client:
-                    response = client.chat.send(
-                        model="qwen/qwen3-32b",
-                        messages=[
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ]
-                    )
+                client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=api_key,
+                )
+                
+                response = client.chat.completions.create(
+                    model="qwen/qwen3-32b",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                
+                )
                 llm_result = response.choices[0].message.content
         except Exception as e:
             llm_result = f"เกิดข้อผิดพลาด LLM: {str(e)}"
