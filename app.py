@@ -1,9 +1,6 @@
 import os
 import gradio as gr
 from transformers import pipeline
-import os
-import gradio as gr
-from transformers import pipeline
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from openrouter import OpenRouter
